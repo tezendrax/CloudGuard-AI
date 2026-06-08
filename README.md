@@ -221,16 +221,4 @@ kubectl apply -k kubernetes/production
 - **Metric Ingestion**: 100k+ points/sec capacity.
 
 ---
-
-## 📄 License
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for complete details.
-
----
-
-## 🌐 References & Support
-- **Architecture Deep Dive**: [Architecture Methodology](docs/real-time-data-sources.md)
-- **Cost Optimization Theory**: [Theory of Optimization](docs/cost-optimization-theory-and-tech.md)
-- **Live Demo**: [demo.cloudguard-ai.com](https://demo.cloudguard-ai.com)
-- **Contact**: support@cloudguard-ai.com
-
 Built with ❤️ by the **CloudGuard AI Team**. *Revolutionizing cloud management through artificial intelligence.*
