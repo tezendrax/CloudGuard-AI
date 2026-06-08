@@ -1,0 +1,104 @@
+# Self-Healing Configuration for CloudGuard AI
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: self-healing-config
+  namespace: cloudguard-ai
+data:
+  healing_rules.yaml: |
+    healing_rules:
+      # Application-level healing
+      - name: "restart_unhealthy_pods"
+        condition: "pod_health_check_failed"
+        action: "restart_pod"
+        threshold: 3
+        cooldown: 300s
+      
+      - name: "scale_on_high_error_rate"
+        condition: "error_rate > 5%"
+        action: "scale_up"
+        scale_factor: 2
+        max_replicas: 20
+      
+      - name: "circuit_breaker_activation"
+        condition: "response_time > 5s"
+        action: "enable_circuit_breaker"
+        duration: 60s
+      
+      # Infrastructure-level healing
+      - name: "replace_unhealthy_nodes"
+        condition: "node_not_ready"
+        action: "cordon_and_drain"
+        timeout: 600s
+      
+      - name: "storage_cleanup"
+        condition: "disk_usage > 85%"
+        action: "cleanup_logs"
+        retention: "7d"
+
+---
+# Network Policies for Self-Healing
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloudguard-network-policy
+  namespace: cloudguard-ai
+spec:
+  podSelector:
+    matchLabels:
+      app: cloudguard-frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: cloudguard-ai
+    - podSelector:
+        matchLabels:
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 8001
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 6379  # Redis
+    - protocol: TCP
+      port: 8086  # InfluxDB
+
+---
+# Pod Disruption Budget for High Availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloudguard-frontend-pdb
+  namespace: cloudguard-ai
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: cloudguard-frontend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloudguard-ai-service-pdb
+  namespace: cloudguard-ai
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cloudguard-ai-service

@@ -1,0 +1,26 @@
+# CloudGuard AI - Python AI/ML Microservice Dependencies
+# Core ML/AI
+tensorflow
+numpy
+pandas
+scikit-learn
+
+# API Framework
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+# Utilities
+requests
+python-dotenv
+joblib
+
+# Basic visualization
+matplotlib
+
+# Cloud SDKs (basic)
+boto3
+
+# Simple deps only for demo
+redis

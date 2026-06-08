@@ -1,0 +1,451 @@
+// CloudGuard AI Database Schema
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  password  String
+  role      UserRole @default(USER)
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  organizations OrganizationMember[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  settings    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  members       OrganizationMember[]
+  cloudAccounts CloudAccount[]
+  digitalTwins  DigitalTwin[]
+  policies      Policy[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String           @id @default(uuid())
+  userId         String
+  organizationId String
+  role           OrganizationRole @default(MEMBER)
+  joinedAt       DateTime         @default(now())
+
+  // Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Cloud Infrastructure
+model CloudAccount {
+  id             String      @id @default(uuid())
+  organizationId String
+  name           String
+  provider       CloudProvider
+  credentials    Json // Encrypted credentials
+  region         String
+  status         AccountStatus @default(ACTIVE)
+  lastSyncAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  resources    CloudResource[]
+  digitalTwins DigitalTwin[]
+  metrics      Metric[]
+
+  @@map("cloud_accounts")
+}
+
+model CloudResource {
+  id              String       @id @default(uuid())
+  cloudAccountId  String
+  externalId      String // Resource ID from cloud provider
+  name            String
+  type            ResourceType
+  status          ResourceStatus @default(RUNNING)
+  region          String
+  tags            Json?
+  configuration   Json
+  cost            Float?
+  lastSyncAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Relations
+  cloudAccount CloudAccount  @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+  digitalTwin  DigitalTwin?
+  metrics      Metric[]
+  alerts       Alert[]
+
+  @@unique([cloudAccountId, externalId])
+  @@map("cloud_resources")
+}
+
+// Digital Twin System
+model DigitalTwin {
+  id               String     @id @default(uuid())
+  organizationId   String
+  cloudAccountId   String
+  cloudResourceId  String?    @unique
+  name             String
+  type             TwinType
+  state            Json       // Current state representation
+  predictedState   Json?      // Predicted future state
+  lastSimulation   DateTime?
+  accuracy         Float?     // Prediction accuracy percentage
+  isActive         Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  // Relations
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cloudAccount  CloudAccount   @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+  cloudResource CloudResource? @relation(fields: [cloudResourceId], references: [id], onDelete: Cascade)
+  simulations   Simulation[]
+  predictions   Prediction[]
+
+  @@map("digital_twins")
+}
+
+model Simulation {
+  id            String      @id @default(uuid())
+  digitalTwinId String
+  scenario      String
+  parameters    Json
+  results       Json
+  duration      Int         // Simulation duration in seconds
+  status        SimulationStatus @default(RUNNING)
+  startedAt     DateTime    @default(now())
+  completedAt   DateTime?
+
+  // Relations
+  digitalTwin DigitalTwin @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+
+  @@map("simulations")
+}
+
+model Prediction {
+  id            String          @id @default(uuid())
+  digitalTwinId String
+  type          PredictionType
+  timeframe     Int             // Hours into the future
+  confidence    Float           // Confidence percentage
+  prediction    Json            // Prediction data
+  actualOutcome Json?           // Actual outcome for accuracy measurement
+  status        PredictionStatus @default(PENDING)
+  createdAt     DateTime        @default(now())
+  validatedAt   DateTime?
+
+  // Relations
+  digitalTwin DigitalTwin @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+
+  @@map("predictions")
+}
+
+// Monitoring & Metrics
+model Metric {
+  id              String    @id @default(uuid())
+  cloudAccountId  String
+  cloudResourceId String?
+  name            String
+  value           Float
+  unit            String
+  tags            Json?
+  timestamp       DateTime  @default(now())
+
+  // Relations
+  cloudAccount  CloudAccount   @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+  cloudResource CloudResource? @relation(fields: [cloudResourceId], references: [id])
+
+  @@index([cloudAccountId, name, timestamp])
+  @@map("metrics")
+}
+
+model Alert {
+  id              String      @id @default(uuid())
+  cloudResourceId String
+  name            String
+  description     String
+  severity        AlertSeverity
+  status          AlertStatus @default(OPEN)
+  conditions      Json
+  actions         Json?       // Automated actions taken
+  triggeredAt     DateTime    @default(now())
+  resolvedAt      DateTime?
+  acknowledgedAt  DateTime?
+
+  // Relations
+  cloudResource CloudResource @relation(fields: [cloudResourceId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+// Policy & Automation
+model Policy {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  description    String
+  type           PolicyType
+  conditions     Json         // Policy conditions
+  actions        Json         // Actions to take
+  isActive       Boolean      @default(true)
+  priority       Int          @default(5)
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  executions   PolicyExecution[]
+
+  @@map("policies")
+}
+
+model PolicyExecution {
+  id         String           @id @default(uuid())
+  policyId   String
+  status     ExecutionStatus  @default(PENDING)
+  input      Json
+  output     Json?
+  error      String?
+  startedAt  DateTime         @default(now())
+  completedAt DateTime?
+
+  // Relations
+  policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@map("policy_executions")
+}
+
+// Security & Compliance
+model SecurityEvent {
+  id          String            @id @default(uuid())
+  type        SecurityEventType
+  severity    AlertSeverity
+  source      String
+  description String
+  metadata    Json
+  status      AlertStatus       @default(OPEN)
+  detectedAt  DateTime          @default(now())
+  resolvedAt  DateTime?
+
+  @@map("security_events")
+}
+
+model ComplianceCheck {
+  id          String           @id @default(uuid())
+  standard    String           // e.g., "SOC2", "HIPAA", "GDPR"
+  rule        String
+  description String
+  status      ComplianceStatus
+  evidence    Json?
+  checkedAt   DateTime         @default(now())
+  nextCheckAt DateTime
+
+  @@map("compliance_checks")
+}
+
+// Cost Management
+model CostAnalysis {
+  id              String   @id @default(uuid())
+  cloudAccountId  String
+  resourceType    String?
+  service         String
+  actualCost      Float
+  predictedCost   Float?
+  optimizedCost   Float?
+  savings         Float?
+  currency        String   @default("USD")
+  period          String   // e.g., "daily", "monthly"
+  date            DateTime
+  createdAt       DateTime @default(now())
+
+  @@map("cost_analysis")
+}
+
+// Audit & Logging
+model AuditLog {
+  id        String    @id @default(uuid())
+  userId    String?
+  action    String
+  resource  String
+  details   Json
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime  @default(now())
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, timestamp])
+  @@index([resource, timestamp])
+  @@map("audit_logs")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  USER
+  VIEWER
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum CloudProvider {
+  AWS
+  AZURE
+  GCP
+  MULTI_CLOUD
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+  PENDING
+}
+
+enum ResourceType {
+  COMPUTE
+  STORAGE
+  NETWORK
+  DATABASE
+  SECURITY
+  ANALYTICS
+  CONTAINER
+  SERVERLESS
+  OTHER
+}
+
+enum ResourceStatus {
+  RUNNING
+  STOPPED
+  PENDING
+  TERMINATED
+  ERROR
+  UNKNOWN
+}
+
+enum TwinType {
+  INFRASTRUCTURE
+  APPLICATION
+  SECURITY
+  COST
+  PERFORMANCE
+}
+
+enum SimulationStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PredictionType {
+  PERFORMANCE
+  COST
+  SECURITY
+  FAILURE
+  SCALING
+}
+
+enum PredictionStatus {
+  PENDING
+  VALIDATED
+  FAILED
+  EXPIRED
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  SUPPRESSED
+}
+
+enum PolicyType {
+  SECURITY
+  COST_OPTIMIZATION
+  SCALING
+  COMPLIANCE
+  BACKUP
+  MONITORING
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum SecurityEventType {
+  UNAUTHORIZED_ACCESS
+  DATA_BREACH
+  MALWARE
+  VULNERABILITY
+  POLICY_VIOLATION
+  ANOMALY
+}
+
+enum ComplianceStatus {
+  COMPLIANT
+  NON_COMPLIANT
+  PENDING
+  NOT_APPLICABLE
+}

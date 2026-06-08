@@ -1,0 +1,105 @@
+# Self-Healing Monitoring and Automation
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudguard-monitoring
+  namespace: cloudguard-ai
+  labels:
+    app: cloudguard-monitoring
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudguard-monitoring
+  template:
+    metadata:
+      labels:
+        app: cloudguard-monitoring
+    spec:
+      serviceAccountName: cloudguard-healing-sa
+      containers:
+      - name: monitoring-agent
+        image: cloudguard-ai/monitoring:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KUBERNETES_NAMESPACE
+          value: "cloudguard-ai"
+        - name: HEALING_ENABLED
+          value: "true"
+        - name: PROMETHEUS_URL
+          value: "http://prometheus-service:9090"
+        - name: ALERT_MANAGER_URL
+          value: "http://alertmanager-service:9093"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: healing-config
+          mountPath: /config
+      volumes:
+      - name: healing-config
+        configMap:
+          name: self-healing-config
+
+---
+# Service Account for Self-Healing Operations
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloudguard-healing-sa
+  namespace: cloudguard-ai
+
+---
+# ClusterRole for Self-Healing Operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cloudguard-healing-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "services", "endpoints"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+- apiGroups: ["custom.metrics.k8s.io"]
+  resources: ["*"]
+  verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cloudguard-healing-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cloudguard-healing-role
+subjects:
+- kind: ServiceAccount
+  name: cloudguard-healing-sa
+  namespace: cloudguard-ai

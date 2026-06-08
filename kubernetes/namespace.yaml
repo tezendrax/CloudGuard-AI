@@ -1,0 +1,8 @@
+# CloudGuard AI Kubernetes Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudguard-ai
+  labels:
+    name: cloudguard-ai
+    environment: production
