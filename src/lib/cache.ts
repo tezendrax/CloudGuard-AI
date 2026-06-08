@@ -128,7 +128,7 @@ class CacheService {
     if (this.isConnected && this.redis) {
       try {
         if (prefix) {
-          const keys = await this.redis.keys(`${prefix}:*`)
+          const keys = await this.redis.keys(`cloudguard:${prefix}:*`)
           if (keys.length > 0) {
             await this.redis.del(keys)
           }
@@ -143,7 +143,7 @@ class CacheService {
 
     // Fallback to in-memory cache
     if (prefix) {
-      const prefixKey = `${prefix}:`
+      const prefixKey = `cloudguard:${prefix}:`
       for (const key of this.fallbackCache.keys()) {
         if (key.startsWith(prefixKey)) {
           this.fallbackCache.delete(key)

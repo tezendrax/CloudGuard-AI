@@ -64,27 +64,31 @@ export class AuthService {
 
   static async register(credentials: RegisterCredentials): Promise<{ user: AuthUser; token: string }> {
     // Check if user already exists
-    // Mock implementation - replace with real database logic
-    // const existingUser = await prisma.user.findUnique({
-    //   where: { email: credentials.email }
-    // })
+    const existingUser = await prisma.user.findUnique({
+      where: { email: credentials.email }
+    })
+
+    if (existingUser) {
+      throw new Error('User already exists with this email')
+    }
 
     // Hash password
     const hashedPassword = await this.hashPassword(credentials.password)
 
-    // Mock user creation
-    const user = {
-      id: 'mock-user-' + Date.now(),
-      email: credentials.email,
-      name: credentials.name,
-      password: hashedPassword,
-      role: 'USER'
-    }
+    // Create user in database
+    const user = await prisma.user.create({
+      data: {
+        email: credentials.email,
+        name: credentials.name || null,
+        password: hashedPassword,
+        role: 'USER'
+      }
+    })
 
     const authUser: AuthUser = {
       id: user.id,
       email: user.email,
-      name: user.name,
+      name: user.name || undefined,
       role: user.role
     }
 

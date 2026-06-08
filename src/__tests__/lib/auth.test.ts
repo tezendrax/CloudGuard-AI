@@ -1,3 +1,4 @@
+/** @jest-environment node */
 import { jest } from '@jest/globals'
 import { AuthService } from '@/lib/auth'
 import { prisma } from '@/lib/db'
