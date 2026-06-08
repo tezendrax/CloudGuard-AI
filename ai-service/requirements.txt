@@ -24,3 +24,4 @@ boto3
 
 # Simple deps only for demo
 redis
+influxdb-client
